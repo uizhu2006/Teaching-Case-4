@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UX/UI 设计还原度智能走查计分器 V4.1 (最终修正版)</title>
+    
+    <!-- 引入 React 和 ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- 引入 Babel 用于解析 JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 自定义样式 -->
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        .inner-shadow { box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06); }
+        /* 打印样式优化 */
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white; }
+            .print-break-inside { break-inside: avoid; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
+
+        // ---------------- Icon Components (SVG) ----------------
+        const IconBase = ({ children, size = 24, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {children}
+            </svg>
+        );
+
+        const Clipboard = (props) => <IconBase {...props}><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></IconBase>;
+        const RefreshCw = (props) => <IconBase {...props}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></IconBase>;
+        const ChevronDown = (props) => <IconBase {...props}><path d="m6 9 6 6 6-6"/></IconBase>;
+        const ChevronUp = (props) => <IconBase {...props}><path d="m18 15-6-6-6 6"/></IconBase>;
+        const AlertCircle = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></IconBase>;
+        const CheckCircle = (props) => <IconBase {...props}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></IconBase>;
+        const XCircle = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></IconBase>;
+        const Award = (props) => <IconBase {...props}><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></IconBase>;
+        const Palette = (props) => <IconBase {...props}><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></IconBase>;
+        const Fingerprint = (props) => <IconBase {...props}><path d="M2 12C2 6.5 6.5 2 12 2a10 10 0 0 1 8 6"/><path d="M5 15.1a2 2 0 0 0 2.2 2.2"/><path d="M16.5 19.8a2 2 0 0 0 2.2-2.2"/><path d="M19.4 15a2 2 0 0 0 .9-3.2"/><path d="M8.8 19.8a3 3 0 0 1-5.6-3.4"/><path d="M2.2 11.1c.6-3 3.3-5.2 6.4-5.1"/><path d="M15.4 5.9c3.1.2 5.7 2.3 6.3 5.3"/><path d="M6 11c.8-1.3 2.2-2 3.8-2 .9 0 1.8.3 2.5.8l.2.2"/><path d="M18 11c-.8-1.3-2.2-2-3.8-2-.9 0-1.8.3-2.5.8l-.2.2"/><path d="M12 20v-8"/></IconBase>;
+        const Layers = (props) => <IconBase {...props}><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></IconBase>;
+        const Smartphone = (props) => <IconBase {...props}><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></IconBase>;
+        const MousePointer = (props) => <IconBase {...props}><path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="m13 13 6 6"/></IconBase>;
+        const Eye = (props) => <IconBase {...props}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></IconBase>;
+        const FileJson = (props) => <IconBase {...props}><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 12a1 1 0 0 0-1 1v1a1 1 0 0 1-1 1 1 1 0 0 1 1 1v1a1 1 0 0 0 1 1"/></IconBase>;
+        const Type = (props) => <IconBase {...props}><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></IconBase>;
+        const AlertTriangle = (props) => <IconBase {...props}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></IconBase>;
+        const Zap = (props) => <IconBase {...props}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></IconBase>;
+        const Download = (props) => <IconBase {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></IconBase>;
+        const User = (props) => <IconBase {...props}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></IconBase>;
+        const Briefcase = (props) => <IconBase {...props}><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></IconBase>;
+
+        // ---------------- Main Component ----------------
+        const WalkthroughTool = () => {
+            
+            // ---------------- Project Info State ----------------
+            const [projectInfo, setProjectInfo] = useState({
+                name: '',
+                reviewer: ''
+            });
+
+            // ---------------- Data Structure (Total 100 Points) ----------------
+            const checklistData = [
+                // ================= UI 视觉还原 (50分) =================
+                {
+                    section: 'UI',
+                    id: 'ui_base',
+                    title: '🎨 UI - 视觉规范与基础 (10分)',
+                    description: '品牌色、图标精度与设计系统',
+                    items: [
+                        { id: 'u1', text: '品牌色与辅助色', weight: 3, suggestion: '核对 Hex 值。注意深色模式下，主色是否需要降饱和度以避免刺眼。严禁使用设计系统外的“野颜色”。' },
+                        { id: 'u2', text: '图标 (Icons) 精度', weight: 3, suggestion: '必须 SVG。检查 2x/3x 屏是否有锯齿。图标视觉重心需居中，而非仅仅物理居中。' },
+                        { id: 'u3', text: '投影与圆角一致性', weight: 2, suggestion: '全站卡片投影（Shadow）参数是否统一？圆角（Radius）是否遵循 4px/8px/12px 等倍数规律？' },
+                        { id: 'u4', text: '1px 线条处理', weight: 2, suggestion: '在 Retina 屏上，分割线应为 0.5px (物理 1px)。检查是否出现 1.5px 或 2px 的粗线条渲染错误。' },
+                    ]
+                },
+                {
+                    id: 'ui_layout',
+                    title: '📐 UI - 布局与适配 (10分)',
+                    description: '栅格、间距与多端适配',
+                    items: [
+                        { id: 'u5', text: '4px/8px 栅格间距', weight: 3, suggestion: '测量模块间距 (Margin) 和内边距 (Padding) 是否为 4 或 8 的倍数。拒绝奇数间距（如 13px）。' },
+                        { id: 'u6', text: '多尺寸屏幕适配', weight: 2, suggestion: '在 iPhone SE (小屏) 和 Max (大屏) 上查看。内容是拉伸、居中还是折行？确保无重叠。' },
+                        { id: 'u7', text: '刘海与安全区域', weight: 3, suggestion: '内容需避开刘海、灵动岛。底部按钮需避开 Home Indicator (小黑条)，通常需加 34px 底部 Padding。' },
+                        { id: 'u8', text: '层级关系 (Z-Index)', weight: 2, suggestion: 'Toast > 弹窗 > 遮罩 > 悬浮球 > 导航栏 > 内容。确保遮罩层没有错误地盖住导航栏或被内容穿透。' },
+                    ]
+                },
+                {
+                    id: 'ui_text',
+                    title: '📝 UI - 文本与内容细节 (10分)',
+                    description: '排版、默认值与特殊字符',
+                    items: [
+                        { id: 'u9', text: '字体渲染与行高', weight: 3, suggestion: 'iOS/Android/Windows 字体渲染不同，需检查行高是否拥挤。数字/金额必须用等宽字体 (Tabular nums)。' },
+                        { id: 'u10', text: '默认图与占位符', weight: 2, suggestion: '头像加载失败显示默认头像；图片加载失败显示占位图。所有文本位需考虑“最大字符数”显示效果。' },
+                        { id: 'u11', text: '标点与“孤儿词”', weight: 3, suggestion: '检查行末标点是否被挤压。尽量避免段落最后一行只有一个单字（孤儿词），通过 CSS 控制换行。' },
+                        { id: 'u12', text: '内容真实性测试', weight: 2, suggestion: '不要只测 "Name"，要测 "Christopher"。金额测 0.00 和 99,999,999.00。确保布局不崩。' },
+                    ]
+                },
+                {
+                    id: 'ui_polish',
+                    title: '✨ UI - 质感与动效 (10分)',
+                    description: '暗黑模式、过渡与微交互',
+                    items: [
+                        { id: 'u13', text: '暗黑模式 (Dark Mode)', weight: 4, suggestion: '文字对比度至少 4.5:1。背景应分层级（纯黑/深灰）。图片/Banner 在深色模式下通常需叠加 10%-20% 黑色蒙层。' },
+                        { id: 'u14', text: '动效时长与曲线', weight: 3, suggestion: '页面转场 300ms，微交互 200ms。必须使用 Ease-out 或 Spring 曲线，拒绝线性匀速运动。' },
+                        { id: 'u15', text: '按压态 (Active State)', weight: 3, suggestion: '不仅按钮，列表项、卡片点击时也应有变灰或缩放反馈。给用户“我点到了”的信心。' },
+                    ]
+                },
+                {
+                    id: 'ui_dev',
+                    title: '📦 UI - 交付与工程化 (10分)',
+                    description: '切图、命名与资源',
+                    items: [
+                        { id: 'u16', text: '切图资源规范', weight: 4, suggestion: '切图尺寸必须是偶数。背景透明切图需留出安全边距。命名使用英文小写+下划线 (ic_home_active.png)。' },
+                        { id: 'u17', text: '图片压缩与格式', weight: 3, suggestion: '大图用 WebP/JPG，透明图用 PNG/SVG。确保资源已压缩，不影响加载速度。' },
+                        { id: 'u18', text: '设计稿图层清理', weight: 3, suggestion: '交付给开发的稿件，需删除隐藏图层、废弃画板。图层编组清晰，方便开发查看属性。' },
+                    ]
+                },
+
+                // ================= UX 交互体验 (50分) =================
+                {
+                    section: 'UX',
+                    id: 'ux_input',
+                    title: '👆 UX - 输入与表单 (10分)',
+                    description: '键盘、校验与操作便利性',
+                    items: [
+                        { id: 'i1', text: '键盘类型适配', weight: 3, suggestion: '手机号->数字键盘；邮箱->英文键盘；搜索->键盘右下角显示“搜索”而非“换行”。' },
+                        { id: 'i2', text: '输入格式化', weight: 2, suggestion: '输入手机号/银行卡时，自动添加空格分隔 (3-4-4)。支持一键清除按钮。' },
+                        { id: 'i3', text: '表单校验时机', weight: 3, suggestion: '不要用户刚打一个字就报错。通常在“失去焦点”或“点击提交”时校验。密码强度可实时校验。' },
+                        { id: 'i4', text: '防遮挡体验', weight: 2, suggestion: '键盘弹起时，输入框和关键按钮（如“下一步”）必须顶起，不能被键盘遮住。' },
+                    ]
+                },
+                {
+                    id: 'ux_feedback',
+                    title: '📢 UX - 反馈与状态 (10分)',
+                    description: 'Toast、加载与空状态',
+                    items: [
+                        { id: 'i5', text: '加载反馈分级', weight: 3, suggestion: '局部加载用 Spinner；页面加载用骨架屏 (Skeleton)；进度条用于确定时长的操作。拒绝全屏白屏。' },
+                        { id: 'i6', text: 'Toast 提示逻辑', weight: 2, suggestion: '成功提示 1.5s 消失；错误提示需 3s 或需手动关闭。文字不能折行太多，层级需最高。' },
+                        { id: 'i7', text: '空状态引导', weight: 3, suggestion: '不仅显示“暂无数据”，更要给解决方案：是去添加？还是重置筛选条件？还是刷新试试？' },
+                        { id: 'i8', text: '点击热区扩大', weight: 2, suggestion: '移动端 44pt 原则。如果图标很小，必须在代码中增加透明 Padding 扩大点击范围。' },
+                    ]
+                },
+                {
+                    id: 'ux_flow',
+                    title: '🔄 UX - 流程与异常 (10分)',
+                    description: '中断、网络与返回逻辑',
+                    items: [
+                        { id: 'i9', text: '网络异常处理', weight: 3, suggestion: '断网/超时需显示“网络开小差了”及重试按钮。图片挂了显示占位图。不要直接把 404/500 代码丢给用户。' },
+                        { id: 'i10', text: '中断恢复 (保活)', weight: 2, suggestion: '表单填一半切出去回微信，回来后内容还在吗？列表点进详情再返回，滚动位置还在吗？' },
+                        { id: 'i11', text: '防抖 (Debounce)', weight: 3, suggestion: '弱网下疯狂点击提交，不应产生重复订单或弹窗。按钮点击后应立即 Disable 或 Loading。' },
+                        { id: 'i12', text: '返回逻辑闭环', weight: 2, suggestion: '物理返回键 = 页面返回按钮。深层页面是否有“回到首页”的快速路径？' },
+                    ]
+                },
+                {
+                    id: 'ux_gesture',
+                    title: '🖐️ UX - 手势与系统特性 (10分)',
+                    description: '侧滑、状态栏与权限',
+                    items: [
+                        { id: 'i13', text: 'iOS 侧滑返回', weight: 3, suggestion: '所有二级页面必须支持左侧边缘右滑返回。避免与左滑删除或地图操作冲突。' },
+                        { id: 'i14', text: '状态栏 (Status Bar)', weight: 2, suggestion: '浅色背景页->黑色文字状态栏；深色背景页->白色文字状态栏。避免看不清电量时间。' },
+                        { id: 'i15', text: '权限申请时机', weight: 3, suggestion: '不要启动即申请。在用户点击“相机”图标时再申请相机权限，并解释用途（如：用于拍摄头像）。' },
+                        { id: 'i16', text: '双击与长按', weight: 2, suggestion: '图片支持双指缩放/双击放大。列表项长按是否有更多操作（如复制/删除）？' },
+                    ]
+                },
+                {
+                    id: 'ux_a11y',
+                    title: '♿ UX - 无障碍与易用性 (10分)',
+                    description: '对比度、字号与触控',
+                    items: [
+                        { id: 'i17', text: '最小字号限制', weight: 3, suggestion: '正文不小于 14px (Web) / 12pt (App)。辅助文字不小于 10pt。确保老年用户也能看清。' },
+                        { id: 'i18', text: '色弱模式兼容', weight: 3, suggestion: '不要仅用颜色区分状态（如红/绿），最好配合图标（打勾/感叹号）或文字说明。' },
+                        { id: 'i19', text: '系统字体缩放', weight: 4, suggestion: '当用户在系统设置里调大字体时，App 界面是自适应变大，还是会布局错乱？（至少保证不乱）。' },
+                    ]
+                }
+            ];
+
+            // ----------------State----------------
+            const [answers, setAnswers] = useState({});
+            const [expandedSections, setExpandedSections] = useState(
+                checklistData.reduce((acc, curr) => ({ ...acc, [curr.id]: true }), {})
+            );
+            const [showReport, setShowReport] = useState(false);
+
+            // ----------------Logic----------------
+            const toggleSection = (id) => {
+                setExpandedSections(prev => ({ ...prev, [id]: !prev[id] }));
+            };
+
+            const handleAnswer = (itemId, value) => {
+                setAnswers(prev => ({ ...prev, [itemId]: value }));
+            };
+
+            const scores = useMemo(() => {
+                let uiScore = 0;
+                let uxScore = 0;
+                let totalScore = 0;
+
+                checklistData.forEach(category => {
+                    category.items.forEach(item => {
+                        const answer = answers[item.id];
+                        let points = 0;
+                        if (answer === 'pass') points = item.weight;
+                        if (answer === 'partial') points = item.weight * 0.5;
+
+                        if (category.section === 'UI') {
+                            uiScore += points;
+                        } else {
+                            uxScore += points;
+                        }
+                        totalScore += points;
+                    });
+                });
+                return { uiScore, uxScore, totalScore }; 
+            }, [answers]);
+
+            // [FIXED] Score Calculation Logic for 100 Point Scale
+            const finalScore = Math.round(scores.totalScore); 
+            const uiPercent = Math.round((scores.uiScore / 50) * 100); 
+            const uxPercent = Math.round((scores.uxScore / 50) * 100); 
+
+            const getGrade = (score) => {
+                if (score >= 95) return { label: 'S (完美)', color: 'text-green-600', bg: 'bg-green-100' };
+                if (score >= 85) return { label: 'A (优秀)', color: 'text-blue-600', bg: 'bg-blue-100' };
+                if (score >= 70) return { label: 'B (合格)', color: 'text-yellow-600', bg: 'bg-yellow-100' };
+                if (score >= 50) return { label: 'C (需改进)', color: 'text-orange-600', bg: 'bg-orange-100' };
+                return { label: 'D (重构吧)', color: 'text-red-600', bg: 'bg-red-100' };
+            };
+
+            const generateReport = () => {
+                const failedItems = [];
+                const partialItems = [];
+
+                checklistData.forEach(category => {
+                    category.items.forEach(item => {
+                        if (answers[item.id] === 'fail') failedItems.push(item);
+                        if (answers[item.id] === 'partial') partialItems.push(item);
+                    });
+                });
+
+                const grade = getGrade(finalScore);
+                
+                let text = `【UX/UI 旗舰版走查报告】\n`;
+                if(projectInfo.name) text += `项目名称：${projectInfo.name}\n`;
+                if(projectInfo.reviewer) text += `验收负责人：${projectInfo.reviewer}\n`;
+                text += `生成时间：${new Date().toLocaleString()}\n`;
+                text += `---------------------------\n`;
+                text += `综合得分：${finalScore} / 100\n`;
+                text += `UI还原度：${uiPercent}% | 交互体验：${uxPercent}%\n`;
+                text += `综合评级：${grade.label}\n`;
+                text += `---------------------------\n`;
+                
+                if (failedItems.length > 0) {
+                    text += `🚫 严重问题 (P0 - 阻碍上线):\n`;
+                    failedItems.forEach(item => text += `- [${item.text}] ${item.suggestion}\n`);
+                    text += `\n`;
+                }
+
+                if (partialItems.length > 0) {
+                    text += `⚠️ 建议优化项 (P1 - 提升体验):\n`;
+                    partialItems.forEach(item => text += `- [${item.text}] ${item.suggestion}\n`);
+                }
+
+                if (failedItems.length === 0 && partialItems.length === 0 && finalScore === 100) {
+                    text += `🎉 完美！设计还原精准，工程规范严谨，建议发布！\n`;
+                }
+
+                return text;
+            };
+
+            const downloadPDF = () => {
+                const reportText = generateReport();
+                // Safe HTML escaping
+                const safeText = reportText.replace(/[&<>"']/g, function(m) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+                });
+                
+                const grade = getGrade(finalScore);
+
+                const printWindow = window.open('', '_blank');
+                if (!printWindow) {
+                    alert('请允许弹出窗口以生成 PDF 报告');
+                    return;
+                }
+
+                printWindow.document.write(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>UX/UI 走查报告 - ${projectInfo.name || '未命名项目'}</title>
+                        <style>
+                        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; padding: 40px; color: #1f2937; line-height: 1.6; max-width: 800px; margin: 0 auto; }
+                        .header { border-bottom: 2px solid #4f46e5; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-end; }
+                        .title-block h1 { font-size: 26px; font-weight: 800; color: #111; margin: 0 0 5px 0; }
+                        .title-block p { color: #6b7280; font-size: 14px; margin: 0; }
+                        .meta-block { text-align: right; font-size: 14px; color: #4b5563; }
+                        .score-card { background: #f3f4f6; border-radius: 12px; padding: 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border: 1px solid #e5e7eb; }
+                        .score-big { font-size: 36px; font-weight: bold; color: #4f46e5; }
+                        .score-label { font-size: 13px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+                        .grade-badge { background: ${grade.label.includes('S') || grade.label.includes('A') ? '#dcfce7' : '#fef9c3'}; color: ${grade.label.includes('S') || grade.label.includes('A') ? '#166534' : '#854d0e'}; padding: 5px 15px; border-radius: 20px; font-weight: bold; }
+                        .section-title { font-size: 16px; font-weight: bold; margin-top: 25px; margin-bottom: 10px; color: #374151; border-left: 4px solid #4f46e5; padding-left: 10px; }
+                        .content-box { white-space: pre-wrap; font-family: "Menlo", "Monaco", "Courier New", monospace; font-size: 13px; color: #374151; line-height: 1.8; }
+                        .footer { margin-top: 50px; font-size: 12px; color: #9ca3af; text-align: center; border-top: 1px solid #eee; padding-top: 20px; }
+                        @media print {
+                            body { padding: 0; }
+                        }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="header">
+                            <div class="title-block">
+                                <h1>UX/UI 设计验收走查报告</h1>
+                                <p>Generated by UX/UI Walkthrough Tool V4.1</p>
+                            </div>
+                            <div class="meta-block">
+                                <p><strong>项目：</strong>${projectInfo.name || '未命名'}</p>
+                                <p><strong>验收人：</strong>${projectInfo.reviewer || 'Designer'}</p>
+                                <p><strong>日期：</strong>${new Date().toLocaleDateString()}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="score-card">
+                            <div>
+                                <div class="score-label">综合得分</div>
+                                <div class="score-big">${finalScore} <span style="font-size:16px; color:#9ca3af; font-weight:normal;">/ 100</span></div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div class="score-label">综合评级</div>
+                                <div class="grade-badge">${grade.label}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="section-title">详细诊断记录</div>
+                        <div class="content-box">${safeText.split('---------------------------')[3] || safeText}</div>
+
+                        <div class="footer">
+                            此报告由自动化工具生成，仅供内部验收参考。<br>
+                            优途设计 · 联系方式：180-1879-6460
+                        </div>
+
+                        <script>
+                        window.onload = function() {
+                            setTimeout(function() {
+                            window.print();
+                            }, 500);
+                        }
+                        <\/script>
+                    </body>
+                    </html>
+                `);
+                printWindow.document.close();
+            };
+
+            const resetTool = () => {
+                if(confirm('确定要重置所有选项吗？')) {
+                    setAnswers({});
+                    setShowReport(false);
+                }
+            };
+
+            const gradeInfo = getGrade(finalScore);
+            const totalItems = checklistData.reduce((acc, curr) => acc + curr.items.length, 0);
+            const isComplete = Object.keys(answers).length === totalItems;
+
+            return (
+                <div className="max-w-4xl mx-auto p-4 md:p-8 min-h-screen">
+                    
+                    {/* Header with Inputs */}
+                    <div className="mb-8 text-center">
+                        <h1 className="text-3xl font-bold text-slate-900 mb-2">UX/UI 走查计分器 V4.1 (最终修正版)</h1>
+                        <p className="text-slate-500 mb-6">融合优途设计体系标准 · 精确 100 分制 · 覆盖交付与工程化</p>
+                        
+                        {/* Project Info Inputs */}
+                        <div className="max-w-2xl mx-auto flex flex-col sm:flex-row gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                            <div className="flex-1 flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-indigo-200 transition-all">
+                                <Briefcase size={18} className="text-slate-400" />
+                                <input 
+                                    type="text" 
+                                    placeholder="输入项目名称 (如: 优途设计官网 V2.0)" 
+                                    className="w-full outline-none text-sm font-medium text-slate-700 placeholder:font-normal"
+                                    value={projectInfo.name}
+                                    onChange={(e) => setProjectInfo({...projectInfo, name: e.target.value})}
+                                />
+                            </div>
+                            <div className="flex-1 flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-indigo-200 transition-all">
+                                <User size={18} className="text-slate-400" />
+                                <input 
+                                    type="text" 
+                                    placeholder="输入验收人姓名" 
+                                    className="w-full outline-none text-sm font-medium text-slate-700 placeholder:font-normal"
+                                    value={projectInfo.reviewer}
+                                    onChange={(e) => setProjectInfo({...projectInfo, reviewer: e.target.value})}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Sticky Score Dashboard */}
+                    <div className="sticky top-0 z-20 bg-white shadow-lg rounded-xl p-4 mb-6 border border-slate-100 transition-all">
+                        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                            
+                            <div className="flex items-center gap-6">
+                                <div>
+                                    <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">综合得分</span>
+                                    <div className={`text-4xl font-bold ${gradeInfo.color}`}>{finalScore}</div>
+                                </div>
+                                <div className="h-10 w-px bg-slate-200 hidden md:block"></div>
+                                <div className="flex gap-4 text-sm">
+                                    <div className="flex flex-col">
+                                        <span className="text-slate-400 text-xs uppercase">UI 视觉</span>
+                                        <span className="font-bold text-slate-700">{uiPercent}%</span>
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-slate-400 text-xs uppercase">UX 交互</span>
+                                        <span className="font-bold text-slate-700">{uxPercent}%</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className={`px-5 py-2 rounded-lg font-bold text-lg flex items-center gap-2 ${gradeInfo.bg} ${gradeInfo.color}`}>
+                                <Award size={20} />
+                                {gradeInfo.label}
+                            </div>
+                        </div>
+                        
+                        {/* Progress Bar */}
+                        <div className="w-full bg-slate-100 h-2 mt-4 rounded-full overflow-hidden">
+                            <div 
+                                className="bg-indigo-600 h-full transition-all duration-500 ease-out"
+                                style={{ width: `${(Object.keys(answers).length / totalItems) * 100}%` }}
+                            ></div>
+                        </div>
+                    </div>
+
+                    {/* Checklist Sections */}
+                    <div className="space-y-6 mb-10">
+                        {checklistData.map((category, index) => {
+                            const isNewSection = index === 0 || checklistData[index - 1].section !== category.section;
+                            const sectionTitle = category.section === 'UI' ? 'UI 视觉与工程还原 (50分)' : 'UX 交互与用户体验 (50分)';
+                            const SectionIcon = category.section === 'UI' ? Palette : Fingerprint;
+                            const sectionColor = category.section === 'UI' ? 'text-purple-600 bg-purple-50' : 'text-blue-600 bg-blue-50';
+
+                            return (
+                                <React.Fragment key={category.id}>
+                                    {isNewSection && (
+                                        <div className="flex items-center gap-3 mt-10 mb-4 px-2">
+                                            <div className={`p-2 rounded-lg ${sectionColor}`}>
+                                                <SectionIcon size={24} />
+                                            </div>
+                                            <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{sectionTitle}</h2>
+                                        </div>
+                                    )}
+
+                                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden group hover:border-indigo-200 transition-colors">
+                                        <button 
+                                            onClick={() => toggleSection(category.id)}
+                                            className="w-full flex justify-between items-center p-5 bg-white hover:bg-slate-50 transition-colors"
+                                        >
+                                            <div className="text-left flex items-start gap-3">
+                                                <div className="mt-1 text-slate-400">
+                                                    {category.id.includes('layout') && <Layers size={18} />}
+                                                    {category.id.includes('base') && <Palette size={18} />}
+                                                    {category.id.includes('text') && <Type size={18} />}
+                                                    {category.id.includes('polish') && <Zap size={18} />}
+                                                    {category.id.includes('dev') && <FileJson size={18} />}
+                                                    
+                                                    {category.id.includes('input') && <MousePointer size={18} />}
+                                                    {category.id.includes('feedback') && <AlertCircle size={18} />}
+                                                    {category.id.includes('flow') && <RefreshCw size={18} />}
+                                                    {category.id.includes('gesture') && <Smartphone size={18} />}
+                                                    {category.id.includes('a11y') && <Eye size={18} />}
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-lg font-bold text-slate-800">
+                                                        {category.title}
+                                                    </h3>
+                                                    <p className="text-sm text-slate-500 mt-1">{category.description}</p>
+                                                </div>
+                                            </div>
+                                            {expandedSections[category.id] ? <ChevronUp size={20} className="text-slate-400" /> : <ChevronDown size={20} className="text-slate-400" />}
+                                        </button>
+                                        
+                                        {expandedSections[category.id] && (
+                                            <div className="p-5 pt-0 space-y-4">
+                                                <div className="h-px w-full bg-slate-100 mb-4"></div>
+                                                {category.items.map((item) => (
+                                                    <div key={item.id} className="pb-4 last:pb-0">
+                                                        <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-3 gap-2">
+                                                            <span className="font-medium text-slate-700 flex-1 text-base">{item.text}</span>
+                                                            <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-1 rounded self-start sm:self-auto whitespace-nowrap border border-slate-200">权重: {item.weight}分</span>
+                                                        </div>
+                                                        
+                                                        <div className="flex gap-2 mb-3">
+                                                            <button 
+                                                                onClick={() => handleAnswer(item.id, 'pass')}
+                                                                className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                                                                    answers[item.id] === 'pass' 
+                                                                        ? 'bg-green-600 text-white shadow-md ring-2 ring-green-200 scale-[1.02]' 
+                                                                        : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-green-50 hover:border-green-300 hover:text-green-700'
+                                                                }`}
+                                                            >
+                                                                <CheckCircle size={16} /> 符合
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleAnswer(item.id, 'partial')}
+                                                                className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                                                                    answers[item.id] === 'partial' 
+                                                                        ? 'bg-yellow-500 text-white shadow-md ring-2 ring-yellow-200 scale-[1.02]' 
+                                                                        : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-yellow-50 hover:border-yellow-300 hover:text-yellow-700'
+                                                                }`}
+                                                            >
+                                                                <AlertTriangle size={16} /> 部分
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleAnswer(item.id, 'fail')}
+                                                                className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                                                                    answers[item.id] === 'fail' 
+                                                                        ? 'bg-red-500 text-white shadow-md ring-2 ring-red-200 scale-[1.02]' 
+                                                                        : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-red-50 hover:border-red-300 hover:text-red-700'
+                                                                }`}
+                                                            >
+                                                                <XCircle size={16} /> 不符
+                                                            </button>
+                                                        </div>
+                                                        {(answers[item.id] === 'fail' || answers[item.id] === 'partial') && (
+                                                            <div className="mt-2 p-3 bg-red-50 text-red-900 text-sm rounded-lg border border-red-100 flex items-start gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                                <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-600" />
+                                                                <span className="leading-relaxed"><strong>💡 专家建议：</strong>{item.suggestion}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </React.Fragment>
+                            );
+                        })}
+                    </div>
+
+                    {/* Footer Actions */}
+                    <div className="flex flex-col sm:flex-row gap-4 mb-4">
+                        <button 
+                            onClick={resetTool}
+                            className="flex-1 py-4 border border-slate-300 rounded-xl text-slate-600 font-bold hover:bg-slate-50 flex items-center justify-center gap-2 transition-colors"
+                        >
+                            <RefreshCw size={20} /> 重置所有
+                        </button>
+                        <button 
+                            onClick={() => setShowReport(true)}
+                            disabled={!isComplete}
+                            className={`flex-1 py-4 rounded-xl font-bold text-white shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 ${
+                                isComplete 
+                                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-indigo-200' 
+                                    : 'bg-slate-300 cursor-not-allowed text-slate-500'
+                            }`}
+                        >
+                            <Award size={20} /> 
+                            {isComplete ? '生成专业验收报告' : `请完成所有项 (${Object.keys(answers).length}/${totalItems})`}
+                        </button>
+                    </div>
+
+                    {/* Footer Info */}
+                    <div className="mt-8 text-center text-slate-400 text-sm pb-12">
+                        <p>© 优途设计 · UX/UI 专业走查工具</p>
+                        <p className="mt-1">联系方式：180-1879-6460</p>
+                    </div>
+
+                    {/* Report Modal */}
+                    {showReport && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
+                                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-2xl">
+                                    <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                                        <Clipboard size={20} className="text-indigo-600"/> 验收报告预览
+                                    </h3>
+                                    <button onClick={() => setShowReport(false)} className="text-slate-400 hover:text-slate-600 bg-white p-1 rounded-full shadow-sm border border-slate-200">
+                                        <XCircle size={24} />
+                                    </button>
+                                </div>
+                                
+                                <div className="p-6 overflow-y-auto font-mono text-sm leading-relaxed whitespace-pre-wrap text-slate-700 bg-slate-50 inner-shadow">
+                                    {generateReport()}
+                                </div>
+
+                                <div className="p-6 border-t border-slate-100 bg-white rounded-b-2xl">
+                                    <button 
+                                        onClick={downloadPDF}
+                                        className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 transition-transform active:scale-95"
+                                    >
+                                        <Download size={18} /> 下载报告 PDF 文件
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<WalkthroughTool />);
+    </script>
+</body>
+</html>
